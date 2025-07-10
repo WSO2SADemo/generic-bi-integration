@@ -40,14 +40,6 @@ dependencies = [
 
 [[package]]
 org = "ballerina"
-name = "cloud"
-version = "3.3.2"
-modules = [
-	{org = "ballerina", packageName = "cloud", moduleName = "cloud"}
-]
-
-[[package]]
-org = "ballerina"
 name = "constraint"
 version = "1.7.0"
 dependencies = [
@@ -436,11 +428,18 @@ modules = [
 ]
 
 [[package]]
+org = "ballerinax"
+name = "mysql.driver"
+version = "1.8.0"
+modules = [
+	{org = "ballerinax", packageName = "mysql.driver", moduleName = "mysql.driver"}
+]
+
+[[package]]
 org = "ramindu"
 name = "genericbiintegration"
 version = "0.1.0"
 dependencies = [
-	{org = "ballerina", name = "cloud"},
 	{org = "ballerina", name = "ftp"},
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "io"},
@@ -451,7 +450,8 @@ dependencies = [
 	{org = "ballerina", name = "uuid"},
 	{org = "ballerinai", name = "observe"},
 	{org = "ballerinax", name = "kafka"},
-	{org = "ballerinax", name = "mysql"}
+	{org = "ballerinax", name = "mysql"},
+	{org = "ballerinax", name = "mysql.driver"}
 ]
 modules = [
 	{org = "ramindu", packageName = "genericbiintegration", moduleName = "genericbiintegration"}

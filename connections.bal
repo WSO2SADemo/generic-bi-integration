@@ -2,14 +2,13 @@ import ballerina/ftp;
 import ballerina/http;
 import ballerinax/kafka;
 import ballerinax/mysql;
+import ballerinax/mysql.driver as _;
 
 // Kafka producer client
 public final kafka:Producer kafkaProducer = check new (
     bootstrapServers = kafkaBootstrapServers,
-    config = {
-        secureSocket: secureSocketConfig,
-        securityProtocol: kafka:PROTOCOL_SSL
-    }
+    securityProtocol = kafka:PROTOCOL_SSL,
+    secureSocket = secureSocketConfig
 );
 
 // MySQL database client with SSL configuration for cloud databases
