@@ -8,6 +8,9 @@ import ballerinax/kafka;
 service /telecom on new http:Listener(8080) {
     
     // Endpoint to register new customer
+    function init() returns error? {
+        log:printInfo("telecom Service initialised !");
+    }  
     resource function post customers(CustomerData customerData) returns http:Response|error {
         
         // Create telecom message

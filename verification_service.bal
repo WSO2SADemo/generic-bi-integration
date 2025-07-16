@@ -3,7 +3,9 @@ import ballerina/log;
 
 // HTTP service for customer verification and SMS alert integration
 service /integration on new http:Listener(8082) {
-    
+    function init() returns error? {
+        log:printInfo("integration Service initialised !");
+    }  
     // Endpoint to process customer verification and send SMS alert
     resource function post verify\-and\-alert(xml customerXml) returns http:Response|error {
         
