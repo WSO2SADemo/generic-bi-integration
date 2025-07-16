@@ -9,7 +9,7 @@ generated/
 # Contains configuration values used during development time.
 # See https://ballerina.io/learn/provide-values-to-configurable-variables/ for more details.
 Config.toml
-config.bal
+# config.bal
 .env
 config-val.bal2
 variables.env
