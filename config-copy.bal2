@@ -5,7 +5,6 @@ configurable string accessKeyPath = ?;
 configurable string caCertPath = ?;
 configurable string topicName = ?;
 configurable string planTopicName = ?;
-configurable string planTopicName1 = ?;
 
 // MySQL database configuration
 configurable string mysqlHost = ?;
