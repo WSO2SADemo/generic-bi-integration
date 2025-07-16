@@ -144,7 +144,7 @@ function callVerificationService(CustomerVerificationData verificationData) retu
     
     log:printInfo("Calling verification service", 
         serviceUrl = verificationServiceUrl,
-        endpoint = "/verification/customer"
+        endpoint = "/customer"
     );
     
     // Convert to JSON for verification service call
