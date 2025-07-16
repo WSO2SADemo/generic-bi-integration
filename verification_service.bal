@@ -155,7 +155,7 @@ function callVerificationService(CustomerVerificationData verificationData) retu
     log:printInfo("Verification service request payload", payload = verificationPayload.toString());
     
     // Call verification service
-    http:Response|http:ClientError verificationResponse = verificationClient->post("/verification/customer", verificationPayload);
+    http:Response|http:ClientError verificationResponse = verificationClient->post("/customer", verificationPayload);
     
     if verificationResponse is http:ClientError {
         log:printError("HTTP client error when calling verification service", 'error = verificationResponse);
@@ -228,7 +228,7 @@ function callSmsAlertService(string verificationToken, string customerId, string
     log:printInfo("SMS service request payload", payload = smsRequest.toJson().toString());
     
     // Call SMS service
-    http:Response|http:ClientError smsResponse = smsClient->post("/sms/alert", smsRequest);
+    http:Response|http:ClientError smsResponse = smsClient->post("/alert", smsRequest);
     
     if smsResponse is http:ClientError {
         log:printError("HTTP client error when calling SMS service", 'error = smsResponse);
