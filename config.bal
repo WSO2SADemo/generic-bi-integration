@@ -1,3 +1,11 @@
+// Kafka broker configuration
+configurable string kafkaBootstrapServers = ?;
+configurable string accessCertPath = ?;
+configurable string accessKeyPath = ?;
+configurable string caCertPath = ?;
+configurable string topicName = ?;
+configurable string planTopicName = ?;
+
 // Verification and SMS service configuration
 configurable string verificationServiceUrl = ?;
 configurable string smsServiceUrl = ?;
