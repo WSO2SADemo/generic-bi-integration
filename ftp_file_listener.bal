@@ -74,10 +74,10 @@ function checkFileModifications(string fileName) returns error? {
     
     // Construct the relative path for the FTP client
     string relativePath = "folder1/" + fileName;
-    
+    log:printInfo("File " + relativePath + " polling started.");
     // Get file content from FTP server
     stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(relativePath);
-    
+    log:printInfo("Polled!!");
     // Read file content
     byte[] fileContent = [];
     check fileStream.forEach(function(byte[] & readonly chunk) {
