@@ -216,7 +216,7 @@ function callSmsAlertService(string verificationToken, string customerId, string
     
     log:printInfo("Calling SMS alert service", 
         serviceUrl = smsServiceUrl,
-        endpoint = "/sms/alert"
+        endpoint = "/alert"
     );
     
     // Create SMS alert request
@@ -251,25 +251,32 @@ function callSmsAlertService(string verificationToken, string customerId, string
     
     log:printInfo("Raw SMS service response payload", rawPayload = responsePayload.toString());
     
-    // Accept both 200 and 201 as success for SMS service as well
-    if smsResponse.statusCode == 200 || smsResponse.statusCode == 201 {
-        // Success response
-        SmsSuccessResponse|error smsSuccessResult = responsePayload.cloneWithType(SmsSuccessResponse);
-        if smsSuccessResult is error {
-            log:printError("Failed to convert SMS success response", 'error = smsSuccessResult);
-            return error("Failed to convert SMS success response: " + smsSuccessResult.message());
-        }
-        log:printInfo("Successfully converted to SmsSuccessResponse", messageId = smsSuccessResult.messageId);
-        return smsSuccessResult;
-        
-    } else {
-        // Error response
-        SmsErrorResponse|error smsErrorResult = responsePayload.cloneWithType(SmsErrorResponse);
-        if smsErrorResult is error {
-            log:printError("Failed to convert SMS error response", 'error = smsErrorResult);
-            return error("Failed to convert SMS error response: " + smsErrorResult.message());
-        }
-        log:printInfo("Successfully converted to SmsErrorResponse", errorCode = smsErrorResult.code);
+    // Check response content structure instead of just HTTP status code
+    // First try to convert to error response to detect error conditions
+    SmsErrorResponse|error smsErrorResult = responsePayload.cloneWithType(SmsErrorResponse);
+    if smsErrorResult is SmsErrorResponse {
+        // Response has error structure, treat as error regardless of HTTP status
+        log:printInfo("SMS service returned error response", 
+            errorCode = smsErrorResult.code,
+            errorMessage = smsErrorResult.message
+        );
         return smsErrorResult;
     }
+    
+    // If error conversion failed, try success response conversion
+    SmsSuccessResponse|error smsSuccessResult = responsePayload.cloneWithType(SmsSuccessResponse);
+    if smsSuccessResult is SmsSuccessResponse {
+        // Response has success structure
+        log:printInfo("SMS service returned success response", 
+            messageId = smsSuccessResult.messageId,
+            status = smsSuccessResult.status
+        );
+        return smsSuccessResult;
+    }
+    
+    // If both conversions failed, return error
+    log:printError("Failed to convert SMS response to either success or error format", 
+        rawPayload = responsePayload.toString()
+    );
+    return error("SMS service returned unexpected response format");
 }
