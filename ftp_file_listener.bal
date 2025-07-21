@@ -12,48 +12,18 @@ map<int> lastProcessedLineCount = {};
 // Track last file size to detect changes
 map<int> lastFileSize = {};
 
-// FTP listener service to monitor file changes (for new files only)
-service on new ftp:Listener({
-    protocol: ftp:FTP,
-    host: ftpHost,
-    port: ftpPort,
-    auth: {
-        credentials: {
-            username: ftpUsername,
-            password: ftpPassword
-        }
-    },
-    path: "/folder1",
-    fileNamePattern: "data.csv"
-}) {
-    
-    remote function onFileChange(ftp:WatchEvent & readonly watchEvent, ftp:Caller caller) returns error? {
-        
-        // Process only added files (FTP WatchEvent only supports addedFiles)
-        foreach ftp:FileInfo addedFile in watchEvent.addedFiles {
-            log:printInfo("New file detected", fileName = addedFile.name, filePath = addedFile.path);
-            
-            // Process the new file
-            error? processResult = processNewCSVLines(addedFile.name);
-            if processResult is error {
-                log:printError("Failed to process new CSV lines", 'error = processResult);
-            }
-        }
-    }
-}
-
-// Polling task to check for file modifications
+// Polling task to check for file modifications (removed SFTP listener due to initialization issues)
 task:JobId? pollingJobId = ();
 
 // Initialize polling task when module loads
 function init() {
-    // Start polling task to check for file modifications every 10 seconds
-    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new FilePollingJob(), 10);
+    // Start polling task to check for file modifications every 30 seconds
+    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new FilePollingJob(), 30);
     if result is task:JobId {
         pollingJobId = result;
-        log:printInfo("File polling task started", interval = "10 seconds");
+        log:printInfo("SFTP file polling task started", interval = "30 seconds");
     } else {
-        log:printError("Failed to start file polling task", 'error = result);
+        log:printError("Failed to start SFTP file polling task", 'error = result);
     }
 }
 
@@ -64,7 +34,7 @@ class FilePollingJob {
         // Check for modifications to data.csv
         error? checkResult = checkFileModifications("data.csv");
         if checkResult is error {
-            log:printError("Error checking file modifications", 'error = checkResult);
+            log:printError("Error checking SFTP file modifications", 'error = checkResult);
         }
     }
 }
@@ -72,22 +42,40 @@ class FilePollingJob {
 // Function to check if file has been modified
 function checkFileModifications(string fileName) returns error? {
     
-    // Construct the relative path for the FTP client
-    string relativePath = "/folder1/" + fileName;
-    log:printInfo("File " + relativePath + " polling started.");
-    // Get file content from FTP server
-    stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(relativePath);
-    log:printInfo("Polled!!");
+    // Use the exact path from configuration
+    string filePath = ftpFilePath; // "/telecomdemolocation/data.csv"
+    log:printInfo("SFTP file polling started", filePath = filePath);
+    
+    // Get file content from SFTP server with error handling
+    stream<byte[] & readonly, io:Error?>|ftp:Error fileStream = ftpClient->get(filePath);
+    
+    if fileStream is ftp:Error {
+        log:printError("Failed to connect to SFTP server or file not found", 'error = fileStream);
+        return fileStream;
+    }
+    
+    log:printInfo("SFTP file accessed successfully");
+    
     // Read file content
     byte[] fileContent = [];
-    check fileStream.forEach(function(byte[] & readonly chunk) {
+    error? readResult = fileStream.forEach(function(byte[] & readonly chunk) {
         foreach byte b in chunk {
             fileContent.push(b);
         }
     });
     
+    if readResult is error {
+        log:printError("Failed to read SFTP file content", 'error = readResult);
+        return readResult;
+    }
+    
     // Convert bytes to string
-    string csvContent = check string:fromBytes(fileContent);
+    string|error csvContent = string:fromBytes(fileContent);
+    if csvContent is error {
+        log:printError("Failed to convert file content to string", 'error = csvContent);
+        return csvContent;
+    }
+    
     int currentFileSize = csvContent.length();
     
     // Check if file size has changed
@@ -100,7 +88,7 @@ function checkFileModifications(string fileName) returns error? {
     }
     
     if currentFileSize != previousFileSize {
-        log:printInfo("File modification detected", 
+        log:printInfo("SFTP file modification detected", 
             fileName = fileName,
             previousSize = previousFileSize,
             currentSize = currentFileSize
@@ -112,38 +100,11 @@ function checkFileModifications(string fileName) returns error? {
         // Process new lines
         error? processResult = processNewCSVLinesFromContent(fileName, csvContent);
         if processResult is error {
-            log:printError("Failed to process modified CSV file", 'error = processResult);
+            log:printError("Failed to process modified CSV file from SFTP", 'error = processResult);
         }
+    } else {
+        log:printInfo("No changes detected in SFTP file", fileName = fileName, fileSize = currentFileSize);
     }
-}
-
-// Function to process only new lines in CSV file
-function processNewCSVLines(string fileName) returns error? {
-    
-    log:printInfo("Starting to process new lines in CSV file", fileName = fileName);
-    
-    // Construct the relative path for the FTP client
-    string relativePath = "folder1/" + fileName;
-    
-    // Get file content from FTP server using relative path
-    stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(relativePath);
-    
-    // Read file content
-    byte[] fileContent = [];
-    check fileStream.forEach(function(byte[] & readonly chunk) {
-        foreach byte b in chunk {
-            fileContent.push(b);
-        }
-    });
-    
-    // Convert bytes to string
-    string csvContent = check string:fromBytes(fileContent);
-    log:printInfo("CSV file content retrieved", contentLength = csvContent.length());
-    
-    // Update file size tracking
-    lastFileSize[fileName] = csvContent.length();
-    
-    return processNewCSVLinesFromContent(fileName, csvContent);
 }
 
 // Function to process new lines from CSV content
@@ -165,7 +126,7 @@ function processNewCSVLinesFromContent(string fileName, string csvContent) retur
         return error("CSV file must contain at least header and one data row");
     }
     
-    log:printInfo("File parsing details", 
+    log:printInfo("SFTP file parsing details", 
         fileName = fileName,
         totalLines = lines.length(),
         nonEmptyLines = nonEmptyLines.length(),
@@ -181,7 +142,7 @@ function processNewCSVLinesFromContent(string fileName, string csvContent) retur
         }
     }
     
-    log:printInfo("Processing state", 
+    log:printInfo("SFTP processing state", 
         fileName = fileName,
         lastProcessedDataLines = lastProcessedDataLines,
         currentDataLines = nonEmptyLines.length() - 1
@@ -196,10 +157,10 @@ function processNewCSVLinesFromContent(string fileName, string csvContent) retur
         string line = nonEmptyLines[i];
         error? lineResult = processCSVLine(line, i);
         if lineResult is error {
-            log:printError("Failed to process CSV line", lineNumber = i, 'error = lineResult);
+            log:printError("Failed to process CSV line from SFTP", lineNumber = i, 'error = lineResult);
         } else {
             newLinesProcessed += 1;
-            log:printInfo("Processed line", lineNumber = i, content = line);
+            log:printInfo("Processed SFTP line", lineNumber = i, content = line);
         }
     }
     
@@ -207,7 +168,7 @@ function processNewCSVLinesFromContent(string fileName, string csvContent) retur
     int currentDataLines = nonEmptyLines.length() - 1;
     lastProcessedLineCount[fileName] = currentDataLines;
     
-    log:printInfo("Completed processing new CSV lines", 
+    log:printInfo("Completed processing new CSV lines from SFTP", 
         fileName = fileName,
         newLinesProcessed = newLinesProcessed,
         totalDataLinesInFile = currentDataLines,
@@ -256,7 +217,7 @@ function processCSVLine(string csvLine, int lineNumber) returns error? {
         return error("Failed to publish plan data to Kafka: " + result.message());
     }
     
-    log:printInfo("New plan data published successfully", 
+    log:printInfo("New plan data published successfully from SFTP", 
         customerId = planData.customerId,
         phoneNumber = planData.phoneNumber,
         planType = planData.planType,
@@ -268,7 +229,7 @@ function processCSVLine(string csvLine, int lineNumber) returns error? {
 public function resetFilePosition(string fileName) {
     int? removedValue = lastProcessedLineCount.removeIfHasKey(fileName);
     int? removedSize = lastFileSize.removeIfHasKey(fileName);
-    log:printInfo("Reset file position tracking", fileName = fileName);
+    log:printInfo("Reset SFTP file position tracking", fileName = fileName);
 }
 
 // Function to get current file position (useful for monitoring)
@@ -288,13 +249,13 @@ public function stopFilePolling() {
     if currentJobId is task:JobId {
         task:Error? result = task:unscheduleJob(currentJobId);
         if result is task:Error {
-            log:printError("Failed to stop file polling task", 'error = result);
+            log:printError("Failed to stop SFTP file polling task", 'error = result);
         } else {
-            log:printInfo("File polling task stopped successfully");
+            log:printInfo("SFTP file polling task stopped successfully");
             pollingJobId = (); // Reset to null after successful unscheduling
         }
     } else {
-        log:printWarn("No polling task to stop - task may not be running");
+        log:printWarn("No SFTP polling task to stop - task may not be running");
     }
 }
 
@@ -304,11 +265,30 @@ public function restartFilePolling() {
     stopFilePolling();
     
     // Start new polling task
-    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new FilePollingJob(), 10);
+    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new FilePollingJob(), 30);
     if result is task:JobId {
         pollingJobId = result;
-        log:printInfo("File polling task restarted", interval = "10 seconds");
+        log:printInfo("SFTP file polling task restarted", interval = "30 seconds");
     } else {
-        log:printError("Failed to restart file polling task", 'error = result);
+        log:printError("Failed to restart SFTP file polling task", 'error = result);
+    }
+}
+
+// Function to test SFTP connection manually
+public function testSFTPConnection() returns error? {
+    log:printInfo("Testing SFTP connection", host = ftpHost, port = ftpPort, username = ftpUsername);
+    
+    stream<byte[] & readonly, io:Error?>|ftp:Error fileStream = ftpClient->get(ftpFilePath);
+    
+    if fileStream is ftp:Error {
+        log:printError("SFTP connection test failed", 'error = fileStream);
+        return fileStream;
+    } else {
+        log:printInfo("SFTP connection test successful");
+        // Close the stream
+        error? closeResult = fileStream.close();
+        if closeResult is error {
+            log:printWarn("Failed to close SFTP stream", 'error = closeResult);
+        }
     }
 }

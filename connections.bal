@@ -9,9 +9,9 @@ public final kafka:Producer kafkaProducer = check new (
     secureSocket = secureSocketConfig
 );
 
-// FTP client for file operations
+// SFTP client for file operations (changed from FTP to SFTP)
 public final ftp:Client ftpClient = check new ({
-    protocol: ftp:FTP,
+    protocol: ftp:SFTP,
     host: ftpHost,
     port: ftpPort,
     auth: {
