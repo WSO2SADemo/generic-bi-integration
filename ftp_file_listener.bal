@@ -14,7 +14,7 @@ map<int> lastFileSize = {};
 
 // FTP listener service to monitor file changes (for new files only)
 service on new ftp:Listener({
-    protocol: ftp:FTP,
+    protocol: ftp:SFTP,
     host: ftpHost,
     port: ftpPort,
     auth: {
@@ -23,7 +23,7 @@ service on new ftp:Listener({
             password: ftpPassword
         }
     },
-    path: "/folder1",
+    path: "/telecomdemolocation",
     fileNamePattern: "data.csv"
 }) {
     
@@ -72,12 +72,14 @@ class FilePollingJob {
 // Function to check if file has been modified
 function checkFileModifications(string fileName) returns error? {
     
-    // Construct the relative path for the FTP client
-    string relativePath = "folder1/" + fileName;
-    log:printInfo("File " + relativePath + " polling started.");
+    // Use the full path to the file including the directory
+    string fullPath = "/telecomdemolocation/" + fileName;
+    log:printInfo("File " + fullPath + " polling started.");
+    
     // Get file content from FTP server
-    stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(relativePath);
+    stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(fullPath);
     log:printInfo("Polled!!");
+    
     // Read file content
     byte[] fileContent = [];
     check fileStream.forEach(function(byte[] & readonly chunk) {
@@ -122,11 +124,11 @@ function processNewCSVLines(string fileName) returns error? {
     
     log:printInfo("Starting to process new lines in CSV file", fileName = fileName);
     
-    // Construct the relative path for the FTP client
-    string relativePath = "folder1/" + fileName;
+    // Use the full path to the file including the directory
+    string fullPath = "/telecomdemolocation/" + fileName;
     
-    // Get file content from FTP server using relative path
-    stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(relativePath);
+    // Get file content from FTP server using full path
+    stream<byte[] & readonly, io:Error?> fileStream = check ftpClient->get(fullPath);
     
     // Read file content
     byte[] fileContent = [];
