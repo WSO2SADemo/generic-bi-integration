@@ -1,7 +1,7 @@
 import ballerinax/kafka;
 import ballerinax/mysql.driver as _;
 
-// Kafka SSL configuration (moved here to avoid circular dependency)
+// Kafka SSL configuration
 final kafka:SecureSocket secureSocketConfig = {
     cert: caCertPath,
     'key: {

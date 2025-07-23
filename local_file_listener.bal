@@ -1,19 +1,16 @@
+import ballerina/file;
 import ballerina/io;
 import ballerina/log;
 import ballerina/time;
 import ballerina/uuid;
 import ballerinax/kafka;
 import ballerina/task;
-import ballerina/file;
 
 // Track last processed line count for each file
 map<int> lastProcessedLineCount = {};
 
-// Track last file modification time to detect changes
-map<int> lastFileModTime = {};
-
-// Flag to track if initial processing is done
-boolean initialProcessingDone = false;
+// Track last file size to detect changes
+map<int> lastFileSize = {};
 
 // Polling task to check for file modifications
 task:JobId? pollingJobId = ();
@@ -21,129 +18,111 @@ task:JobId? pollingJobId = ();
 // Initialize polling task when module loads
 function init() {
     // Start polling task to check for file modifications every 30 seconds
-    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new FilePollingJob(), 5);
+    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new LocalFilePollingJob(), 30);
     if result is task:JobId {
         pollingJobId = result;
-        log:printInfo("Local file polling task started", interval = "5 seconds");
+        log:printInfo("Local file polling task started", interval = "30 seconds");
     } else {
         log:printError("Failed to start local file polling task", 'error = result);
     }
 }
 
-// Job class for polling file changes
-class FilePollingJob {
+// Job class for polling local file changes
+class LocalFilePollingJob {
     
     public function execute() {
-        // Only start polling after initial processing is complete
-        if !initialProcessingDone {
-            log:printInfo("Skipping polling - initial processing not yet complete");
-            return;
-        }
-        
-        // Check for modifications to data.csv
-        error? checkResult = checkFileModifications("data.csv");
+        // Check for modifications to the local CSV file
+        error? checkResult = checkLocalFileModifications();
         if checkResult is error {
             log:printError("Error checking local file modifications", 'error = checkResult);
         }
     }
 }
 
-// Function to check if file has been modified
-function checkFileModifications(string fileName) returns error? {
+// Function to check if local file has been modified
+function checkLocalFileModifications() returns error? {
     
     log:printInfo("Local file polling started", filePath = localFilePath);
     
     // Check if file exists
-    boolean|file:Error fileExists = file:test(localFilePath, file:EXISTS);
-    if fileExists is file:Error {
-        return error("Error checking file existence: " + fileExists.message());
-    }
+    boolean fileExists = check file:test(localFilePath, file:EXISTS);
     if !fileExists {
-        return error("File does not exist: " + localFilePath);
+        log:printWarn("Local CSV file does not exist", filePath = localFilePath);
+        return;
     }
     
-    // Use current timestamp as a simple modification check
-    // In a real scenario, you would check actual file modification time
-    int currentTime = <int>time:utcNow()[0];
+    // Get file metadata to check size
+    file:MetaData & readonly fileMetadata = check file:getMetaData(localFilePath);
+    int currentFileSize = fileMetadata.size;
     
-    // Check if enough time has passed since last check (to simulate file modification)
-    int lastModTime = 0;
-    if lastFileModTime.hasKey(fileName) {
-        int? storedTime = lastFileModTime[fileName];
-        if storedTime is int {
-            lastModTime = storedTime;
+    // Check if file size has changed
+    int previousFileSize = 0;
+    string fileName = check file:basename(localFilePath);
+    if lastFileSize.hasKey(fileName) {
+        int? storedSize = lastFileSize[fileName];
+        if storedSize is int {
+            previousFileSize = storedSize;
         }
     }
     
-    // For demonstration, we'll check if the file content has actually changed
-    // by reading it and comparing with what we've processed
-    string[][]|io:Error csvData = io:fileReadCsv(path = localFilePath);
-    if csvData is io:Error {
-        return error("Failed to read CSV file for modification check: " + csvData.message());
-    }
-    
-    int currentDataLines = csvData.length() - 1; // Exclude header
-    int lastProcessedDataLines = 0;
-    if lastProcessedLineCount.hasKey(fileName) {
-        int? storedCount = lastProcessedLineCount[fileName];
-        if storedCount is int {
-            lastProcessedDataLines = storedCount;
-        }
-    }
-    
-    if currentDataLines > lastProcessedDataLines {
-        log:printInfo("New data detected in local file", 
+    if currentFileSize != previousFileSize {
+        log:printInfo("Local file modification detected", 
             fileName = fileName,
-            lastProcessedLines = lastProcessedDataLines,
-            currentDataLines = currentDataLines
+            previousSize = previousFileSize,
+            currentSize = currentFileSize
         );
         
-        // Update modification time tracking
-        lastFileModTime[fileName] = currentTime;
+        // Update file size tracking
+        lastFileSize[fileName] = currentFileSize;
         
-        // Process new lines
-        error? processResult = processNewCSVLines(fileName);
+        // Read and process the file
+        error? processResult = processLocalCSVFile(fileName);
         if processResult is error {
-            log:printError("Failed to process modified CSV file", 'error = processResult);
-            return processResult;
+            log:printError("Failed to process modified local CSV file", 'error = processResult);
         }
     } else {
-        log:printInfo("No new data detected in local file", 
-            fileName = fileName, 
-            processedLines = lastProcessedDataLines,
-            currentLines = currentDataLines
-        );
+        log:printInfo("No changes detected in local file", fileName = fileName, fileSize = currentFileSize);
     }
 }
 
-// Function to process new lines from CSV file
-function processNewCSVLines(string fileName) returns error? {
+// Function to process the local CSV file
+function processLocalCSVFile(string fileName) returns error? {
     
-    log:printInfo("Starting to process new CSV lines", fileName = fileName);
+    log:printInfo("Starting to process local CSV file", fileName = fileName, filePath = localFilePath);
     
-    // Read CSV file from local file system using io:fileReadCsv
-    string[][]|io:Error csvData = io:fileReadCsv(path = localFilePath);
+    // Read file content using io:fileReadString
+    string csvContent = check io:fileReadString(localFilePath);
+    log:printInfo("Local CSV file content retrieved", contentLength = csvContent.length());
     
-    if csvData is io:Error {
-        log:printError("Failed to read CSV file", 'error = csvData);
-        return error("Failed to read CSV file: " + csvData.message());
+    return processNewCSVLinesFromContent(fileName, csvContent);
+}
+
+// Function to process new lines from CSV content
+function processNewCSVLinesFromContent(string fileName, string csvContent) returns error? {
+    
+    // Create regex pattern for line breaks and split content into lines
+    string:RegExp lineBreakPattern = re `\r?\n`;
+    string[] lines = lineBreakPattern.split(csvContent);
+    
+    // Filter out empty lines
+    string[] nonEmptyLines = [];
+    foreach string line in lines {
+        string trimmedLine = line.trim();
+        if trimmedLine.length() > 0 {
+            nonEmptyLines.push(trimmedLine);
+        }
     }
     
-    if csvData.length() < 2 {
-        log:printError("CSV file validation failed", totalRows = csvData.length());
+    if nonEmptyLines.length() < 2 {
         return error("CSV file must contain at least header and one data row");
     }
     
     log:printInfo("Local file parsing details", 
         fileName = fileName,
-        totalRows = csvData.length(),
-        dataRows = csvData.length() - 1
+        totalLines = lines.length(),
+        nonEmptyLines = nonEmptyLines.length(),
+        dataLines = nonEmptyLines.length() - 1
     );
-    
-    // Print the header for debugging
-    if csvData.length() > 0 {
-        log:printInfo("CSV Header", header = csvData[0].toString());
-    }
     
     // Get last processed line count for this file (this tracks data lines, not including header)
     int lastProcessedDataLines = 0;
@@ -154,10 +133,10 @@ function processNewCSVLines(string fileName) returns error? {
         }
     }
     
-    log:printInfo("Local file processing state", 
+    log:printInfo("Local processing state", 
         fileName = fileName,
         lastProcessedDataLines = lastProcessedDataLines,
-        currentDataLines = csvData.length() - 1
+        currentDataLines = nonEmptyLines.length() - 1
     );
     
     int newLinesProcessed = 0;
@@ -165,33 +144,19 @@ function processNewCSVLines(string fileName) returns error? {
     // Process only new data lines (skip header at index 0)
     // Start from (lastProcessedDataLines + 1) to get the next unprocessed line
     int startIndex = lastProcessedDataLines + 1; // +1 to account for header
-    
-    log:printInfo("Processing rows from index", startIndex = startIndex, totalRows = csvData.length());
-    
-    // Process each row individually with detailed error handling
-    foreach int i in startIndex ..< csvData.length() {
-        log:printInfo("About to process row", rowIndex = i);
-        
-        if i >= csvData.length() {
-            log:printError("Row index out of bounds", rowIndex = i, totalRows = csvData.length());
-            continue;
-        }
-        
-        string[] row = csvData[i];
-        log:printInfo("Processing row", rowIndex = i, rowData = row.toString());
-        
-        error? lineResult = processCSVRow(row, i);
+    foreach int i in startIndex ..< nonEmptyLines.length() {
+        string line = nonEmptyLines[i];
+        error? lineResult = processCSVLine(line, i);
         if lineResult is error {
-            log:printError("Failed to process CSV row", lineNumber = i, 'error = lineResult);
-            // Continue processing other rows even if one fails
+            log:printError("Failed to process CSV line from local file", lineNumber = i, 'error = lineResult);
         } else {
             newLinesProcessed += 1;
-            log:printInfo("Successfully processed local file row", lineNumber = i, content = row.toString());
+            log:printInfo("Processed local file line", lineNumber = i, content = line);
         }
     }
     
     // Update last processed data line count (excluding header)
-    int currentDataLines = csvData.length() - 1;
+    int currentDataLines = nonEmptyLines.length() - 1;
     lastProcessedLineCount[fileName] = currentDataLines;
     
     log:printInfo("Completed processing new CSV lines from local file", 
@@ -200,76 +165,37 @@ function processNewCSVLines(string fileName) returns error? {
         totalDataLinesInFile = currentDataLines,
         lastProcessedDataLines = currentDataLines
     );
-    
-    return ();
 }
 
-// Function to process individual CSV row
-function processCSVRow(string[] fields, int lineNumber) returns error? {
+// Function to process individual CSV line
+function processCSVLine(string csvLine, int lineNumber) returns error? {
     
-    log:printInfo("Processing CSV row fields", lineNumber = lineNumber, fieldCount = fields.length(), fields = fields.toString());
+    // Create regex pattern for comma separation and split CSV line
+    string:RegExp commaPattern = re `,`;
+    string[] fields = commaPattern.split(csvLine);
     
     if fields.length() != 6 {
-        string errorMsg = "Invalid CSV format. Expected 6 fields but found " + fields.length().toString();
-        log:printError(errorMsg, lineNumber = lineNumber, actualFields = fields.toString());
-        return error(errorMsg);
+        return error("Invalid CSV format. Expected 6 fields but found " + fields.length().toString());
     }
     
-    // Validate and trim fields
-    string customerId = fields[0].trim();
-    string phoneNumber = fields[1].trim();
-    string planType = fields[2].trim();
-    string monthlyChargeStr = fields[3].trim();
-    string status = fields[4].trim();
-    string registrationDate = fields[5].trim();
-    
-    log:printInfo("Parsed CSV fields", 
-        customerId = customerId,
-        phoneNumber = phoneNumber,
-        planType = planType,
-        monthlyChargeStr = monthlyChargeStr,
-        status = status,
-        registrationDate = registrationDate
-    );
-    
-    // Parse monthly charge with error handling
-    decimal|error monthlyChargeResult = decimal:fromString(monthlyChargeStr);
-    if monthlyChargeResult is error {
-        string errorMsg = "Failed to parse monthly charge: " + monthlyChargeResult.message();
-        log:printError(errorMsg, lineNumber = lineNumber, monthlyChargeStr = monthlyChargeStr);
-        return error(errorMsg);
-    }
-    
-    log:printInfo("Successfully parsed monthly charge", monthlyCharge = monthlyChargeResult);
-    
-    // Use the types from types.bal
+    // Create CustomerPlanData from CSV fields
     CustomerPlanData planData = {
-        customerId: customerId,
-        phoneNumber: phoneNumber,
-        planType: planType,
-        monthlyCharge: monthlyChargeResult,
-        status: status,
-        registrationDate: registrationDate
+        customerId: fields[0].trim(),
+        phoneNumber: fields[1].trim(),
+        planType: fields[2].trim(),
+        monthlyCharge: check decimal:fromString(fields[3].trim()),
+        status: fields[4].trim(),
+        registrationDate: fields[5].trim()
     };
     
-    log:printInfo("Created plan data", planData = planData.toString());
-    
-    // Generate message ID and timestamp
-    string messageId = uuid:createType1AsString();
-    string timestamp = time:utcToString(time:utcNow());
-    
-    log:printInfo("Generated message metadata", messageId = messageId, timestamp = timestamp);
-    
-    // Create plan message using the type from types.bal
+    // Create plan message
     PlanMessage planMessage = {
-        messageId: messageId,
-        timestamp: timestamp,
+        messageId: uuid:createType1AsString(),
+        timestamp: time:utcToString(time:utcNow()),
         planData: planData,
         eventType: "FILE_PLAN_UPDATE",
         sourceFile: localFilePath
     };
-    
-    log:printInfo("Created plan message", messageId = planMessage.messageId, eventType = planMessage.eventType);
     
     // Publish to Kafka topic "telecom_plan"
     kafka:AnydataProducerRecord producerRecord = {
@@ -278,13 +204,9 @@ function processCSVRow(string[] fields, int lineNumber) returns error? {
         key: planData.customerId
     };
     
-    log:printInfo("Publishing to Kafka", topic = planTopicName, key = planData.customerId);
-    
     kafka:Error? result = kafkaProducer->send(producerRecord);
     if result is kafka:Error {
-        string errorMsg = "Failed to publish plan data to Kafka: " + result.message();
-        log:printError(errorMsg, 'error = result);
-        return error(errorMsg);
+        return error("Failed to publish plan data to Kafka: " + result.message());
     }
     
     log:printInfo("New plan data published successfully from local file", 
@@ -293,14 +215,12 @@ function processCSVRow(string[] fields, int lineNumber) returns error? {
         planType = planData.planType,
         lineNumber = lineNumber
     );
-    
-    return ();
 }
 
 // Function to reset file position tracking (useful for testing or maintenance)
 public function resetFilePosition(string fileName) {
     int? removedValue = lastProcessedLineCount.removeIfHasKey(fileName);
-    int? removedTime = lastFileModTime.removeIfHasKey(fileName);
+    int? removedSize = lastFileSize.removeIfHasKey(fileName);
     log:printInfo("Reset local file position tracking", fileName = fileName);
 }
 
@@ -327,7 +247,7 @@ public function stopFilePolling() {
             pollingJobId = (); // Reset to null after successful unscheduling
         }
     } else {
-        log:printWarn("No local file polling task to stop - task may not be running");
+        log:printWarn("No local polling task to stop - task may not be running");
     }
 }
 
@@ -337,7 +257,7 @@ public function restartFilePolling() {
     stopFilePolling();
     
     // Start new polling task
-    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new FilePollingJob(), 30);
+    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new LocalFilePollingJob(), 30);
     if result is task:JobId {
         pollingJobId = result;
         log:printInfo("Local file polling task restarted", interval = "30 seconds");
@@ -351,117 +271,30 @@ public function testLocalFileAccess() returns error? {
     log:printInfo("Testing local file access", filePath = localFilePath);
     
     // Check if file exists
-    boolean|file:Error fileExists = file:test(localFilePath, file:EXISTS);
-    if fileExists is file:Error {
-        log:printError("Local file access test failed", 'error = fileExists);
-        return fileExists;
-    }
+    boolean fileExists = check file:test(localFilePath, file:EXISTS);
     if !fileExists {
-        error fileNotFoundError = error("Local file not found: " + localFilePath);
+        error fileNotFoundError = error("Local CSV file does not exist at: " + localFilePath);
         log:printError("Local file access test failed", 'error = fileNotFoundError);
         return fileNotFoundError;
     }
     
-    // Try to read the file using io:fileReadCsv
-    string[][]|io:Error csvData = io:fileReadCsv(path = localFilePath);
-    if csvData is io:Error {
-        log:printError("Local file access test failed", 'error = csvData);
-        return csvData;
-    } else {
-        log:printInfo("Local file access test successful", rowCount = csvData.length());
-        
-        // Print all rows for debugging
-        foreach int i in 0 ..< csvData.length() {
-            log:printInfo("CSV Row", index = i, data = csvData[i].toString());
-        }
+    // Check if file is readable
+    boolean isReadable = check file:test(localFilePath, file:READABLE);
+    if !isReadable {
+        error notReadableError = error("Local CSV file is not readable: " + localFilePath);
+        log:printError("Local file access test failed", 'error = notReadableError);
+        return notReadableError;
     }
     
-    return ();
-}
-
-// Function to test Kafka connectivity
-public function testKafkaConnection() returns error? {
-    log:printInfo("Testing Kafka connectivity");
-    
-    // Create a simple test message
-    record {
-        string testId;
-        string timestamp;
-        string message;
-    } testMessage = {
-        testId: uuid:createType1AsString(),
-        timestamp: time:utcToString(time:utcNow()),
-        message: "Kafka connectivity test"
-    };
-    
-    // Try to send a test message
-    kafka:AnydataProducerRecord testRecord = {
-        topic: planTopicName,
-        value: testMessage,
-        key: "test-key"
-    };
-    
-    kafka:Error? result = kafkaProducer->send(testRecord);
-    if result is kafka:Error {
-        log:printError("Kafka connectivity test failed", 'error = result);
-        return result;
+    // Try to read the file
+    string|io:Error fileContent = io:fileReadString(localFilePath);
+    if fileContent is io:Error {
+        log:printError("Local file access test failed - cannot read file", 'error = fileContent);
+        return fileContent;
     }
     
-    log:printInfo("Kafka connectivity test message sent successfully");
-    return ();
-}
-
-// Function to process all rows in the file (for initial setup)
-public function processAllRows() returns error? {
-    log:printInfo("Processing all rows in the file");
-    
-    // Reset file position to process all rows
-    resetFilePosition("data.csv");
-    
-    // Process the file
-    error? result = processNewCSVLines("data.csv");
-    if result is error {
-        log:printError("Failed to process all rows", 'error = result);
-        return result;
-    }
-    
-    // Mark initial processing as done
-    initialProcessingDone = true;
-    log:printInfo("Initial processing completed - polling will now handle future changes");
-    
-    return ();
-}
-
-// Function to simulate file modification for testing
-public function simulateFileModification() returns error? {
-    log:printInfo("Simulating file modification for testing");
-    
-    // Reset the last processed count to simulate new data
-    lastProcessedLineCount["data.csv"] = 0;
-    
-    // Process the file again
-    error? result = processNewCSVLines("data.csv");
-    if result is error {
-        log:printError("Failed to simulate file modification", 'error = result);
-        return result;
-    }
-    
-    log:printInfo("File modification simulation completed");
-    return ();
-}
-
-// Function to add new data to file and process (for testing)
-public function addNewDataAndProcess(string[] newRow) returns error? {
-    log:printInfo("Adding new data and processing", newRowData = newRow.toString());
-    
-    // In a real scenario, you would append to the actual file
-    // For now, we'll just simulate processing the new row
-    error? result = processCSVRow(newRow, 999); // Using 999 as a test line number
-    if result is error {
-        log:printError("Failed to process new data", 'error = result);
-        return result;
-    }
-    
-    log:printInfo("New data processed successfully");
-    return ();
+    log:printInfo("Local file access test successful", 
+        filePath = localFilePath,
+        contentLength = fileContent.length()
+    );
 }
