@@ -6,9 +6,4 @@ configurable string caCertPath = ?;
 configurable string topicName = ?;
 configurable string planTopicName = ?;
 
-// FTP configuration
-configurable string ftpHost = ?;
-configurable int ftpPort = ?;
-configurable string ftpUsername = ?;
-configurable string ftpPassword = ?;
-configurable string ftpFilePath = ?;
+configurable string localFilePath = ?;

@@ -1,13 +1,2 @@
-import ballerinax/kafka;
-
-// Kafka SSL configuration
-public final kafka:SecureSocket secureSocketConfig = {
-    cert: caCertPath,
-    'key: {
-        certFile: accessCertPath,
-        keyFile: accessKeyPath
-    },
-    protocol: {
-        name: "TLS"
-    }
-};
+// This file is now empty as the Kafka configuration has been moved to connections.bal
+// to avoid circular dependencies
