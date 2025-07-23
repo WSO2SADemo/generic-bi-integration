@@ -1,12 +1,6 @@
 import ballerina/http;
-import ballerinax/kafka;
 
 // Kafka producer client
-public final kafka:Producer kafkaProducer = check new (
-    bootstrapServers = kafkaBootstrapServers,
-    securityProtocol = kafka:PROTOCOL_SSL,
-    secureSocket = secureSocketConfig
-);
 
 // HTTP client for verification service with OAuth2 client credentials
 public final http:Client verificationClient = check new (verificationServiceUrl, {
