@@ -18,10 +18,10 @@ task:JobId? pollingJobId = ();
 // Initialize polling task when module loads
 function init() {
     // Start polling task to check for file modifications every 30 seconds
-    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new LocalFilePollingJob(), 30);
+    task:JobId|task:Error result = task:scheduleJobRecurByFrequency(new LocalFilePollingJob(), 5);
     if result is task:JobId {
         pollingJobId = result;
-        log:printInfo("Local file polling task started", interval = "30 seconds");
+        log:printInfo("Local file polling task started", interval = "5 seconds");
     } else {
         log:printError("Failed to start local file polling task", 'error = result);
     }
