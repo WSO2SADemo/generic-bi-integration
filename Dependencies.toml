@@ -21,14 +21,6 @@ dependencies = [
 
 [[package]]
 org = "ballerina"
-name = "avro"
-version = "1.2.0"
-dependencies = [
-	{org = "ballerina", name = "jballerina.java"}
-]
-
-[[package]]
-org = "ballerina"
 name = "cache"
 version = "3.10.0"
 dependencies = [
@@ -272,11 +264,10 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "task"
-version = "2.10.0"
+version = "2.7.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "time"},
-	{org = "ballerina", name = "uuid"}
+	{org = "ballerina", name = "time"}
 ]
 
 [[package]]
@@ -296,17 +287,6 @@ dependencies = [
 ]
 
 [[package]]
-org = "ballerina"
-name = "uuid"
-version = "1.10.0"
-dependencies = [
-	{org = "ballerina", name = "crypto"},
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "lang.int"},
-	{org = "ballerina", name = "time"}
-]
-
-[[package]]
 org = "ballerinai"
 name = "observe"
 version = "0.0.0"
@@ -319,41 +299,6 @@ modules = [
 ]
 
 [[package]]
-org = "ballerinax"
-name = "confluent.cavroserdes"
-version = "1.0.2"
-dependencies = [
-	{org = "ballerina", name = "avro"},
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerinai", name = "observe"},
-	{org = "ballerinax", name = "confluent.cregistry"}
-]
-
-[[package]]
-org = "ballerinax"
-name = "confluent.cregistry"
-version = "0.4.1"
-dependencies = [
-	{org = "ballerina", name = "jballerina.java"}
-]
-
-[[package]]
-org = "ballerinax"
-name = "kafka"
-version = "4.5.0"
-dependencies = [
-	{org = "ballerina", name = "crypto"},
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "uuid"},
-	{org = "ballerinai", name = "observe"},
-	{org = "ballerinax", name = "confluent.cavroserdes"},
-	{org = "ballerinax", name = "confluent.cregistry"}
-]
-modules = [
-	{org = "ballerinax", packageName = "kafka", moduleName = "kafka"}
-]
-
-[[package]]
 org = "ramindu"
 name = "genericbiintegration"
 version = "0.1.0"
@@ -361,8 +306,7 @@ dependencies = [
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "lang.runtime"},
 	{org = "ballerina", name = "log"},
-	{org = "ballerinai", name = "observe"},
-	{org = "ballerinax", name = "kafka"}
+	{org = "ballerinai", name = "observe"}
 ]
 modules = [
 	{org = "ramindu", packageName = "genericbiintegration", moduleName = "genericbiintegration"}
