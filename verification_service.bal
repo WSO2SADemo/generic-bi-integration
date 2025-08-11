@@ -1,6 +1,7 @@
 import ballerina/http;
 import ballerina/lang.runtime;
 import ballerina/log;
+import ballerinax/wso2.apim.catalog as _;
 
 // HTTP service for customer verification and SMS alert integration
 service /integration on new http:Listener(8082) {
